@@ -1,0 +1,18 @@
+{
+  "name"             : "finwo/punycode",
+  "minimum-stability": "stable",
+  "authors"          : [
+    {
+      "name" : "Robin Bron",
+      "email": "robin@finwo.nl"
+    }
+  ],
+  "autoload"         : {
+    "psr-4": {
+      "Finwo\\Punycode\\": "src"
+    }
+  },
+  "require"          : {
+    "php": ">=5.3"
+  }
+}
