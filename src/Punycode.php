@@ -52,6 +52,8 @@ class Punycode
      */
     protected static $initialized = false;
 
+    public static $encoding = 'UTF-8';
+
     /**
      * @return array
      */
@@ -90,9 +92,9 @@ class Punycode
             'nonBasic' => array(),
         );
 
-        $length = mb_strlen($input);
+        $length = mb_strlen($input, self::$encoding);
         for ($i = 0; $i < $length; $i++) {
-            $char = mb_substr($input, $i, 1);
+            $char = mb_substr($input, $i, 1, self::$encoding);
             $code = self::charToCodePoint($char);
             if ($code < 128) {
                 $codePoints['all'][] = $codePoints['basic'][] = $code;
@@ -222,7 +224,7 @@ class Punycode
         sort($codePoints['nonBasic']);
 
         $i      = 0;
-        $length = mb_strlen($input);
+        $length = mb_strlen($input, self::$encoding);
         while ($h < $length) {
             $m     = $codePoints['nonBasic'][$i++];
             $delta = $delta + ($m - $n) * ($h + 1);
@@ -306,7 +308,7 @@ class Punycode
             $bias   = self::adapt($i - $oldi, ++$outputLength, ($oldi === 0));
             $n      = $n + (int)($i / $outputLength);
             $i      = $i % ($outputLength);
-            $output = mb_substr($output, 0, $i) . self::codePointToChar($n) . mb_substr($output, $i, $outputLength - 1);
+            $output = mb_substr($output, 0, $i, self::$encoding) . self::codePointToChar($n) . mb_substr($output, $i, $outputLength - 1, self::$encoding);
 
             $i++;
         }
