@@ -48,28 +48,38 @@ class Punycode
     protected static $encodeTable = array();
 
     /**
-     * @return array
+     * @var bool
      */
-    protected static function getDecodeTable()
-    {
-        return self::$decodeTable;
-    }
+    protected static $initialized = false;
 
     /**
      * @return array
      */
-    protected static function getEncodeTable()
+    protected static function buildEncodeTable()
     {
-        if(!count(self::$encodeTable)) {
+        if (!count(self::$encodeTable)) {
             self::$encodeTable = array_keys(self::$decodeTable);
         }
+
         return self::$encodeTable;
+    }
+
+    /**
+     * Initialize the encoder if needed
+     */
+    protected static function init()
+    {
+        if (self::$initialized) {
+            return;
+        }
+        self::buildEncodeTable();
     }
 
     /**
      * List code points for a given input
      *
      * @param string $input
+     *
      * @return array Multi-dimension array with basic, non-basic and aggregated code points
      */
     protected static function listCodePoints($input)
@@ -98,6 +108,7 @@ class Punycode
      * Convert a single or multi-byte character to its code point
      *
      * @param string $char
+     *
      * @return integer
      */
     protected static function charToCodePoint($char)
@@ -118,6 +129,7 @@ class Punycode
      * Convert a code point to its single or multi-byte character
      *
      * @param integer $code
+     *
      * @return string
      */
     protected static function codePointToChar($code)
@@ -138,6 +150,7 @@ class Punycode
      *
      * @param integer $k
      * @param integer $bias
+     *
      * @return integer
      */
     protected static function calculateThreshold($k, $bias)
@@ -147,6 +160,7 @@ class Punycode
         } elseif ($k >= $bias + static::TMAX) {
             return static::TMAX;
         }
+
         return $k - $bias;
     }
 
@@ -156,23 +170,24 @@ class Punycode
      * @param integer $delta
      * @param integer $numPoints
      * @param boolean $firstTime
+     *
      * @return integer
      */
     protected static function adapt($delta, $numPoints, $firstTime)
     {
-        $delta = (int) (
+        $delta = (int)(
         ($firstTime)
             ? $delta / static::DAMP
             : $delta / 2
         );
-        $delta += (int) ($delta / $numPoints);
+        $delta += (int)($delta / $numPoints);
 
         $k = 0;
         while ($delta > ((static::BASE - static::TMIN) * static::TMAX) / 2) {
-            $delta = (int) ($delta / (static::BASE - static::TMIN));
-            $k = $k + static::BASE;
+            $delta = (int)($delta / (static::BASE - static::TMIN));
+            $k     = $k + static::BASE;
         }
-        $k = $k + (int) (((static::BASE - static::TMIN + 1) * $delta) / ($delta + static::SKEW));
+        $k = $k + (int)(((static::BASE - static::TMIN + 1) * $delta) / ($delta + static::SKEW));
 
         return $k;
     }
@@ -182,14 +197,15 @@ class Punycode
      *
      * @return string $encodedString
      */
-    public static function encode( $input )
+    public static function encode($input)
     {
+        self::init();
         $codePoints = self::listCodePoints($input);
 
-        $n      = static::INITIAL_N;
-        $bias   = static::INITIAL_BIAS;
-        $delta  = 0;
-        $h      = $b = count($codePoints['basic']);
+        $n     = static::INITIAL_N;
+        $bias  = static::INITIAL_BIAS;
+        $delta = 0;
+        $h     = $b = count($codePoints['basic']);
 
         $output = '';
         foreach ($codePoints['basic'] as $code) {
@@ -205,12 +221,12 @@ class Punycode
         $codePoints['nonBasic'] = array_unique($codePoints['nonBasic']);
         sort($codePoints['nonBasic']);
 
-        $i = 0;
+        $i      = 0;
         $length = mb_strlen($input);
         while ($h < $length) {
-            $m = $codePoints['nonBasic'][$i++];
+            $m     = $codePoints['nonBasic'][$i++];
             $delta = $delta + ($m - $n) * ($h + 1);
-            $n = $m;
+            $n     = $m;
 
             foreach ($codePoints['all'] as $c) {
                 if ($c < $n || $c < static::INITIAL_N) {
@@ -218,7 +234,7 @@ class Punycode
                 }
                 if ($c === $n) {
                     $q = $delta;
-                    for ($k = static::BASE;; $k += static::BASE) {
+                    for ($k = static::BASE; ; $k += static::BASE) {
                         $t = self::calculateThreshold($k, $bias);
                         if ($q < $t) {
                             break;
@@ -231,7 +247,7 @@ class Punycode
                     }
 
                     $output .= static::$encodeTable[$q];
-                    $bias = self::adapt($delta, $h + 1, ($h === $b));
+                    $bias  = self::adapt($delta, $h + 1, ($h === $b));
                     $delta = 0;
                     $h++;
                 }
@@ -250,12 +266,17 @@ class Punycode
      *
      * @return string $decodedString
      */
-    public static function decode( $encodedString )
+    public static function decode($encodedString)
     {
-        $n = static::INITIAL_N;
-        $i = 0;
-        $bias = static::INITIAL_BIAS;
-        $output = '';
+        self::init();
+        if (!self::isPunycode($encodedString)) {
+            return $encodedString;
+        }
+        $encodedString = substr($encodedString, strlen(static::PREFIX));
+        $n             = static::INITIAL_N;
+        $i             = 0;
+        $bias          = static::INITIAL_BIAS;
+        $output        = '';
 
         $pos = strrpos($encodedString, static::DELIMITER);
         if ($pos !== false) {
@@ -268,12 +289,12 @@ class Punycode
         $inputLength  = strlen($encodedString);
         while ($pos < $inputLength) {
             $oldi = $i;
-            $w = 1;
+            $w    = 1;
 
-            for ($k = static::BASE;; $k += static::BASE) {
+            for ($k = static::BASE; ; $k += static::BASE) {
                 $digit = static::$decodeTable[$encodedString[$pos++]];
-                $i = $i + ($digit * $w);
-                $t = self::calculateThreshold($k, $bias);
+                $i     = $i + ($digit * $w);
+                $t     = self::calculateThreshold($k, $bias);
 
                 if ($digit < $t) {
                     break;
@@ -282,9 +303,9 @@ class Punycode
                 $w = $w * (static::BASE - $t);
             }
 
-            $bias = self::adapt($i - $oldi, ++$outputLength, ($oldi === 0));
-            $n = $n + (int) ($i / $outputLength);
-            $i = $i % ($outputLength);
+            $bias   = self::adapt($i - $oldi, ++$outputLength, ($oldi === 0));
+            $n      = $n + (int)($i / $outputLength);
+            $i      = $i % ($outputLength);
             $output = mb_substr($output, 0, $i) . self::codePointToChar($n) . mb_substr($output, $i, $outputLength - 1);
 
             $i++;
@@ -298,10 +319,15 @@ class Punycode
      *
      * @return bool
      */
-    public static function isPunycode( $stringToCheck )
+    public static function isPunycode($stringToCheck)
     {
-        if(substr($stringToCheck, 0, strlen(static::PREFIX)) != static::PREFIX) return false;
-        if(strpos($stringToCheck, static::DELIMITER, strlen(static::PREFIX)) === false) return false;
+        if (substr($stringToCheck, 0, strlen(static::PREFIX)) != static::PREFIX) {
+            return false;
+        }
+        if (strpos($stringToCheck, static::DELIMITER, strlen(static::PREFIX)) === false) {
+            return false;
+        }
+
         return true;
     }
 }
